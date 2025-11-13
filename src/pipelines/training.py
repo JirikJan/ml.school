@@ -19,7 +19,7 @@ environment_variables = {
 def build_features_transformer():
     """Build a Scikit-Learn transformer to preprocess the feature columns."""
     from sklearn.compose import ColumnTransformer, make_column_selector
-    from sklearn.impute import SimpleImputer
+    from sklearn.impute import SimpleImputer  # noqa: PLC0415
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
