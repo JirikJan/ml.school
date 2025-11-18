@@ -43,7 +43,7 @@ test:
 # Run training pipeline
 [group('training')]
 @train:
-    uv run src/pipelines/training.py \
+    export PYTHONPATH=${PYTHONPATH:-""}:$(pwd)/src; uv run src/pipelines/training.py \
         --with retry run
 
 # Serve latest registered model locally

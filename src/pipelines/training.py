@@ -1,6 +1,16 @@
+"""Module defines the training pipeline for the penguins project."""
 import os
+import tempfile
 from pathlib import Path
 
+import joblib
+import keras
+import mlflow
+import numpy as np
+import pandas as pd
+import sklearn
+import tensorflow as tf
+from keras import Input, layers, models, optimizers
 from metaflow import (
     Parameter,
     card,
@@ -8,6 +18,11 @@ from metaflow import (
     environment,
     step,
 )
+from sklearn.compose import ColumnTransformer, make_column_selector
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import KFold
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
 
 from common.pipeline import Pipeline, dataset
 
@@ -18,11 +33,6 @@ environment_variables = {
 
 def build_features_transformer():
     """Build a Scikit-Learn transformer to preprocess the feature columns."""
-    from sklearn.compose import ColumnTransformer, make_column_selector
-    from sklearn.impute import SimpleImputer  # noqa: PLC0415
-    from sklearn.pipeline import make_pipeline
-    from sklearn.preprocessing import OneHotEncoder, StandardScaler
-
     numeric_transformer = make_pipeline(
         SimpleImputer(strategy="mean"),
         StandardScaler(),
@@ -59,9 +69,6 @@ def build_features_transformer():
 
 def build_target_transformer():
     """Build a Scikit-Learn transformer to preprocess the target column."""
-    from sklearn.compose import ColumnTransformer
-    from sklearn.preprocessing import OrdinalEncoder
-
     return ColumnTransformer(
         transformers=[("species", OrdinalEncoder(), ["species"])],
     )
@@ -69,8 +76,6 @@ def build_target_transformer():
 
 def build_model(input_shape, learning_rate=0.01):
     """Build and compile the neural network to predict the species of a penguin."""
-    from keras import Input, layers, models, optimizers
-
     model = models.Sequential(
         [
             Input(shape=(input_shape,)),
@@ -119,8 +124,6 @@ class Training(Pipeline):
     @step
     def start(self):
         """Start and prepare the Training pipeline."""
-        import mlflow
-
         self.logger.info("MLflow tracking server: %s", self.mlflow_tracking_uri)
 
         self.mode = "production" if current.is_production else "development"
@@ -145,8 +148,6 @@ class Training(Pipeline):
     @step
     def cross_validation(self):
         """Generate the indices to split the data for the cross-validation process."""
-        from sklearn.model_selection import KFold
-
         # We are going to use a 5-fold cross-validation process. We'll shuffle the data
         # before splitting it into batches.
         kfold = KFold(n_splits=5, shuffle=True)
@@ -201,8 +202,6 @@ class Training(Pipeline):
         This step will run for each fold in the cross-validation process. It trains the
         model using the data we processed in the previous step.
         """
-        import mlflow
-
         self.logger.info("Training fold %d...", self.fold)
 
         # We want to track the training process under the same MLflow run we started at
@@ -253,8 +252,6 @@ class Training(Pipeline):
         This step will run for each fold in the cross-validation process. It evaluates
         the model using the test data associated with the current fold.
         """
-        import mlflow
-
         self.logger.info("Evaluating fold %d...", self.fold)
 
         # Let's evaluate the model using the test data we processed before.
@@ -289,9 +286,6 @@ class Training(Pipeline):
     @step
     def average_scores(self, inputs):
         """Averages the scores computed for each individual model."""
-        import mlflow
-        import numpy as np
-
         # We need access to the `mlflow_run_id` artifact that we set at the start of
         # the flow, but since we are in a join step, we need to merge the artifacts
         # from the incoming branches to make `mlflow_run_id` available.
@@ -348,8 +342,6 @@ class Training(Pipeline):
     @step
     def train(self):
         """Train the final model using the entire dataset."""
-        import mlflow
-
         self.logger.info("Training final model...")
 
         # Let's log the training process under the current MLflow run.
@@ -378,10 +370,6 @@ class Training(Pipeline):
         This function will prepare and register the final model in the model registry
         if its accuracy is above a predefined threshold.
         """
-        import tempfile
-
-        import mlflow
-
         # Since this is a join step, we need to merge the artifacts from the incoming
         # branches to make them available here.
         self.merge_artifacts(inputs)
@@ -439,8 +427,6 @@ class Training(Pipeline):
         The model must preprocess the raw input data before making a prediction, so we
         need to include the Scikit-Learn transformers as part of the model package.
         """
-        import joblib
-
         # Let's start by saving the model inside the supplied directory.
         model_path = (Path(directory) / "model.keras").as_posix()
         self.model.save(model_path)
@@ -460,12 +446,6 @@ class Training(Pipeline):
 
     def _get_model_pip_requirements(self):
         """Return the list of required packages to run the model in production."""
-        import keras
-        import numpy as np
-        import pandas as pd
-        import sklearn
-        import tensorflow as tf
-
         return [
             f"scikit-learn=={sklearn.__version__}",
             f"pandas=={pd.__version__}",
