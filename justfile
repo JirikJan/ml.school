@@ -43,7 +43,7 @@ test:
 # Run training pipeline
 [group('training')]
 @train:
-    export PYTHONPATH=${PYTHONPATH:-""}:$(pwd)/src; uv run src/pipelines/training.py \
+    export PYTHONPATH=${PYTHONPATH:-\"\"}:$(pwd)/src; uv run src/pipelines/training.py \
         --with retry run
 
 # Serve latest registered model locally
@@ -70,17 +70,17 @@ test:
 # Generate fake traffic to local running model
 [group('monitoring')]
 @traffic:
-    uv run src/pipelines/traffic.py run --mode traffic
+    export PYTHONPATH=${PYTHONPATH:-\"\"}:$(pwd)/src; uv run src/pipelines/traffic.py run --mode traffic
 
 # Generate fake labels for data stored in local SQLite database
 [group('monitoring')]
 @labels:
-    uv run src/pipelines/traffic.py run --mode labels
+    export PYTHONPATH=${PYTHONPATH:-\"\"}:$(pwd)/src; uv run src/pipelines/traffic.py run --mode labels
 
 # Run the monitoring pipeline
 [group('monitoring')]
 @monitor:
-    uv run src/pipelines/monitoring.py run
+    export PYTHONPATH=${PYTHONPATH:-\"\"}:$(pwd)/src; uv run src/pipelines/monitoring.py run
 
 # Set up your AWS account using and configure your local environment.
 [group('aws')]
@@ -142,7 +142,7 @@ test:
             --role-session-name mlschool-session \
             --profile "$AWS_USERNAME" --query "Credentials" \
             --output json | \
-            jq -r '"--access_key \(.AccessKeyId) --secret_key \(.SecretAccessKey) --session_token \(.SessionToken)"' \
+            jq -r '"--access_key \\(.AccessKeyId) --secret_key \\(.SecretAccessKey) --session_token \\(.SessionToken)"' \
         ) -X POST -H "Content-Type: application/json" \
         -d '{"inputs": [{"island": "Biscoe", "culmen_length_mm": 48.6, "culmen_depth_mm": 16.0, "flipper_length_mm": 230.0, "body_mass_g": 5800.0, "sex": "MALE" }] }' \
         https://runtime.sagemaker."$AWS_REGION".amazonaws.com/endpoints/"$ENDPOINT_NAME"/invocations
@@ -206,5 +206,3 @@ test:
     METAFLOW_PROFILE=production uv run src/pipelines/deployment.py \
         step-functions trigger \
         --backend backend.Sagemaker
-
-
