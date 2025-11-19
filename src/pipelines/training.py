@@ -1,7 +1,14 @@
 """Module defines the training pipeline for the penguins project."""
+import sys
+from pathlib import Path
+
+# Add the parent directory of the script to the Python path.
+# This is necessary to ensure that the `common` module can be found
+# when running this script from the project's root directory.
+sys.path.append(str(Path(__file__).parent.parent))
+
 import os
 import tempfile
-from pathlib import Path
 
 import joblib
 import keras
@@ -61,6 +68,7 @@ def build_features_transformer():
                 # We want to make sure we ignore the target column which is also a
                 # categorical column. To accomplish this, we can specify the column
                 # names we only want to encode.
+                # Has the sex value predictible value or not?
                 ["island", "sex"],
             ),
         ],

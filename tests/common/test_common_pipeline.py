@@ -1,3 +1,4 @@
+import os
 import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
@@ -5,7 +6,7 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 from metaflow import Run, Runner
 
-from common.pipeline import mlflow, pipeline
+from common.pipeline import configure_logging, configure_mlflow, pipeline
 from inference import backend
 
 
@@ -31,7 +32,8 @@ class MockMutableFlow:
 
 @pytest.fixture(scope="module")
 def metaflow_data():
-    with Runner("tests/common/mock_pipeline.py", show_output=True).run() as running:
+    env = {"PYTHONPATH": os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src"))}
+    with Runner("tests/common/mock_pipeline.py", show_output=True, env=env).run() as running:
         return Run(running.run.pathspec).data
 
 
@@ -61,19 +63,19 @@ def test_pipeline_mutator_adds_logging_and_mlflow_decorators():
         # Check that logging and mlflow decorators are added with correct arguments
         step.add_decorator.assert_has_calls(
             [
-                call("logging", duplicates=step.IGNORE),
-                call("mlflow", duplicates=step.IGNORE),
+                call("configure_logging", duplicates=step.IGNORE),
+                call("configure_mlflow", duplicates=step.IGNORE),
             ]
         )
 
 
 def test_mlflow_decorator_sets_tracking_uri():
     flow = MockMutableFlow()
-    fake_mlflow = SimpleNamespace(set_tracking_uri=MagicMock())
 
-    # Ensure that `import mlflow` inside the decorator picks up our fake module
-    with patch.dict(sys.modules, {"mlflow": fake_mlflow}):
-        decorator = mlflow()
+    # The `mlflow` object is imported in the `common.pipeline` module.
+    # To mock it correctly, we need to patch it in that module's namespace.
+    with patch("common.pipeline.mlflow") as fake_mlflow:
+        decorator = configure_mlflow()
 
         # The `pre_step` function executes the generator up to the `yield`,
         # where the call happens.

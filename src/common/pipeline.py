@@ -1,4 +1,7 @@
+"""Defines the common pipeline for the project."""
 import importlib
+import logging
+import logging.config
 import os
 import re
 import sys
@@ -6,6 +9,8 @@ import time
 from contextlib import suppress
 from pathlib import Path
 
+import mlflow
+import numpy as np
 import pandas as pd
 import yaml
 from metaflow import (
@@ -19,6 +24,13 @@ from metaflow import (
     user_step_decorator,
 )
 
+# For the configuration to remain clean and easy to remember, we want to
+# reference backend classes as "backend.<class_name>" without having to include
+# their full class path. To accomplish this, we need to import the
+# inference.backend module so it's available to the `import_module` call.
+with suppress(ImportError):
+    import inference.backend  # noqa: F401
+
 
 @user_step_decorator
 def dataset(step_name, flow, inputs=None, attr=None):  # noqa: ARG001
@@ -28,8 +40,6 @@ def dataset(step_name, flow, inputs=None, attr=None):  # noqa: ARG001
     with NaN, and shuffles the data before creating an artifact on the
     current flow.
     """
-    import numpy as np
-
     # Let's check if the dataset file exists
     if not Path(flow.dataset).exists():
         # If we don't find the dataset file, we can set the artifact to None
@@ -60,16 +70,13 @@ def dataset(step_name, flow, inputs=None, attr=None):  # noqa: ARG001
 
 
 @user_step_decorator
-def logging(step_name, flow, inputs=None, attributes=None):  # noqa: ARG001
+def configure_logging(step_name, flow, inputs=None, attributes=None):  # noqa: ARG001
     """Configure the logging handler.
 
     We need to configure the logging handler on every individual step of a pipeline.
     This decorator will do that, and will set an artifact so every step in the flow
     has access to it.
     """
-    import logging
-    import logging.config
-
     # Let's get the logging configuration file from the project settings.
     logging_file = flow.project.get("logging", "logging.conf")
 
@@ -87,10 +94,8 @@ def logging(step_name, flow, inputs=None, attributes=None):  # noqa: ARG001
 
 
 @user_step_decorator
-def mlflow(step_name, flow, inputs=None, attributes=None):  # noqa: ARG001
+def configure_mlflow(step_name, flow, inputs=None, attributes=None):  # noqa: ARG001
     """Configure MLflow's tracking URI for the current step."""
-    import mlflow
-
     mlflow.set_tracking_uri(flow.mlflow_tracking_uri)
     yield
 
@@ -103,13 +108,6 @@ def backend(step_name, flow, inputs=None, attributes=None):  # noqa: ARG001
     an instance of the backend implementation class. We'll create an artifact
     so every step in the flow has access to it.
     """
-    # For the configuration to remain clean and easy to remember, we want to
-    # reference backend classes as "backend.<class_name>" without having to include
-    # their full class path. To accomplish this, we need to import the
-    # inference.backend module so it's available to the `import_module` call.
-    with suppress(ImportError):
-        import inference.backend  # noqa: F401
-
     try:
         # Let's import the module containing the backend implementation.
         module, cls = flow.backend.rsplit(".", 1)
@@ -170,10 +168,10 @@ class pipeline(FlowMutator):  # noqa: N801
         """Mutates the supplied flow."""
         for _, step in mutable_flow.steps:
             # We want every step to have access to a preconfigured logger.
-            step.add_decorator("logging", duplicates=step.IGNORE)
+            step.add_decorator("configure_logging", duplicates=step.IGNORE)
 
             # We want to configure the MLflow tracking URI on every step.
-            step.add_decorator("mlflow", duplicates=step.IGNORE)
+            step.add_decorator("configure_mlflow", duplicates=step.IGNORE)
 
 
 @pipeline
